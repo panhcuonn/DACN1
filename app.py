@@ -13,8 +13,8 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from joblib import dump, load
-from sklearn.preprocessing import StandardScaler
-
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 
 
@@ -63,7 +63,7 @@ def load_model_GB(pkl=True):
 def predict(model, data):
     return model.predict(data)
 
-def calculate_BMI(df):
+def process_data(df):
     # Calculating BMI
     w = df['Weight'];
     h = df['Height'];
@@ -87,7 +87,7 @@ def main():
     st.set_page_config(layout="wide")
 
     st.sidebar.title("Menu")
-    selected = st.sidebar.radio("", ["Home", "Predict", "Visualizations"])
+    selected = st.sidebar.radio("", ["Home", "Predict","PCA", "Visualizations"])
 
     if selected == "Home":
         st.title("PYAR Insurance Company")
@@ -178,29 +178,66 @@ def main():
                  BloodPressureProblems, Diabetes, KnownAllergies]])
             st.write(f"(GBM)- Gradient Boosting model Your health insurance premium price is Rs. {prediction_GB[0]:.5f}")
 
+    elif selected == "PCA":
+        df = load_data()
+        # Visual data
+        st.subheader("Data for Predicting")
 
-        #
-        # if prediction1[0] == prediction2[0]:
-        #     st.success("The predictions are same")
-        # else:
-        #     st.success("The predictions are different")
-        # if model_RF == model_GBM:
-        #     print("The pickle files are identical")
-        # else:
-        #     print("The pickle files are different")
+        data_final = process_data(df)
+        data_final = data_final.drop(['Height','Weight','BMI_Status'], axis=1)
+        # Visual
+        st.write(data_final)
+        st.write(data_final.shape)
+
+        X = data_final.drop(['PremiumPrice'],axis=1)
+        y = data_final['PremiumPrice']
+
+        # create PCA
+        scaler = StandardScaler()
+        xsc = scaler.fit_transform(X)
+
+        pca = PCA()
+        pca.fit_transform(xsc)
+
+        st.subheader('PCA')
+        loadings = pd.DataFrame(pca.components_.T, columns=[f'PC{i}' for i in range(1, len(data_final.columns))], index=data_final.columns[:-1])
+        st.write(loadings)
+
+        # Visual heatmap of PCA
+        st.subheader("PCA Loadings Heatmap")
+        fig, ax = plt.subplots(figsize=(12, 8))
+        sns.heatmap(loadings, annot=True, cmap='coolwarm', ax=ax)
+        st.pyplot(fig)
+
+        # Visual Scree Plot and Cumulative Explained Variance
+
+        st.subheader("Scree Plot and Cumulative Explained Variance")
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
+        # Plot scree plot in the first subplot
+        ax1.plot(range(1, len(pca.explained_variance_ratio_) + 1), pca.explained_variance_ratio_, marker='o',
+                 linestyle='--')
+        ax1.set_title('Scree Plot')
+        ax1.set_xlabel('Number of components')
+        ax1.set_ylabel('Explained variance ratio')
+
+        # Calculate cumulative explained variance
+        cumulative_explained_variance = np.cumsum(pca.explained_variance_ratio_)
+
+        # Plot cumulative explained variance in the second subplot
+        ax2.plot(range(1, len(cumulative_explained_variance) + 1), cumulative_explained_variance, marker='o',
+                 linestyle='--')
+        ax2.set_title('Cumulative Explained Variance')
+        ax2.set_xlabel('Number of components')
+        ax2.set_ylabel('Cumulative explained variance')
+        ax2.axhline(y=0.85, color='r', linestyle='-', label='85% Threshold')
+        ax2.text(0.5, 0.85, '80% Cut-off Threshold', color='red', fontsize=16)
+        ax2.legend()
+
+        plt.tight_layout()
+        st.pyplot(fig)
 
 
-
-
-    # elif selected == "Contact":
-    #     st.title("PYAR Insurance Company")
-    #     st.subheader("Reach us at:")
-    #     st.write("abc: 1111111111")
-    #     st.write("def: 2222222222")
-    #     st.write("pqr: 3333333333")
-    #     st.write("lmn: 4444444444")
-    #     st.write("pyarinsurance@pyar.com")
-    #     st.write("insurance@pyar.com")
 
     elif selected == "Visualizations":
         st.title("Visualizations of the Data")
@@ -252,7 +289,6 @@ def main():
         axes[1].set_title('Distribution of the Insurance Premium Price Label', fontsize=12, fontdict={"weight": "bold"})
 
         plt.tight_layout()
-
         st.pyplot(fig)
 
         # --------------------------------------------------------------------------#
@@ -380,7 +416,7 @@ def main():
 
         fig, axes = plt.subplots(ncols=2, figsize=(14, 4))
 
-        df_BMI = calculate_BMI(df)
+        df_BMI = process_data(df)
         sns.countplot(x='PremiumLabel', hue='BMI_Status', data=df_BMI, ax=axes[0])
         sns.boxplot(data=df, x="PremiumPrice", y="BMI_Status", hue="BMI_Status", dodge=False, ax=axes[1]).set_title(
             'Insurance Premium Price for Various BMI Status')
