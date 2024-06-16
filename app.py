@@ -4,10 +4,12 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import numpy as np
+import warnings  as ws
+ws.filterwarnings("ignore")
 
 # Load scikit-learn libraries
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler,PolynomialFeatures
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
@@ -19,56 +21,61 @@ from sklearn.pipeline import Pipeline
 
 
 # Load the data
-@st.cache_data
+# @st.cache_data
 def load_data():
     return pd.read_csv('Medicalpremium.csv')
 
 
 # Load the model
 # @st.cache(allow_output_mutation=True)
-def load_model_Lrn(pkl=True):
-    if pkl ==False:
-        path ="D:\processingdataset\streamlit\lrmodel.joblib"
-        return load(path)
-    else:
-        with open('D:\processingdataset\streamlit\lrmodel.pkl', 'rb') as file:
-            return pickle.load(file)
-
-def load_model_Poly(pkl=True):
-    if pkl ==False:
-        path = "D:\processingdataset\streamlit\polymodel.joblib"
-        return load(path)
-    else:
-        with open('D:\processingdataset\streamlit\polymodel.pkl', 'rb') as file:
-            return pickle.load(file)
-
-def load_model_RF(pkl=True):
-    if pkl ==False:
+def load_model(name_model):
+    if name_model == "linear":
+        path = "D:\processingdataset\streamlit\lrmodel.joblib"
+    if name_model == "poly":
+        path = "../streamlit/poly_pca_20.joblib"
+    if name_model == "rf":
         path = "D:\processingdataset\streamlit/rfmodel.joblib"
-        return load(path)
-    else:
-        with open('D:\processingdataset\streamlit/rfmodel.pkl', 'rb') as file:
-            return pickle.load(file)
-
-def load_model_GB(pkl=True):
-    if pkl ==False:
+    if name_model == "gb":
         path = "D:\processingdataset\streamlit\gbmodel.joblib"
-        return load(path)
-    else:
-        with open('D:\processingdataset\streamlit\gbmodel.pkl', 'rb') as file:
-            return pickle.load(file)
+
+    if name_model == "linear_PCA":
+        path = "D:\processingdataset\streamlit\lrmodel.joblib"
+    if name_model == "poly_PCA":
+        path = "streamlit/poly_pca_20.joblib"
+    if name_model == "rf_PCA":
+        path = "D:\processingdataset\streamlit/rfmodel.joblib"
+    if name_model == "gb_PCA":
+        path = "D:\processingdataset\streamlit\gbmodel.joblib"
+    return load(path)
 
 
 # Make prediction
 def predict(model, data):
     return model.predict(data)
 
+
+def predict_poly(model, data):
+    return None
+
+
+# Preprocessing data
+def preprocess_poly(x):
+    poly_features = PolynomialFeatures(degree=2, include_bias=False)
+    X_poly = poly_features.fit_transform(x)
+    X_poly = pd.DataFrame(X_poly, columns=poly_features.get_feature_names_out(x.columns))
+    return X_poly
+
+
+def preprocess_PCA(x):
+    pca = PCA(n_components=7)
+    pca.fit_transform(x)
+    return x 
+
+
 def process_data(df):
     # Calculating BMI
     w = df['Weight'];
     h = df['Height'];
-
-    # bmi = 10000*(weight/(height*height));
 
     df['BMI'] = 10000 * (w / (h * h))
 
@@ -79,9 +86,14 @@ def process_data(df):
          df['BMI'].between(25, 29.9999999)],
         ['Underweight', 'Obesse', 'Normal', 'Overweight']
     )
-
     return df
 
+
+def get_x(columns, values):
+    X_df = {}
+    X_dict = dict(zip(columns, values))
+    X_df = pd.DataFrame([X_dict])
+    return X_df
 
 def main():
     st.set_page_config(layout="wide")
@@ -124,10 +136,11 @@ def main():
         df = load_data()
 
         # Load model
-        model_Lrn = load_model_Lrn(pkl=False)
-        model_Poly = load_model_Poly(pkl=False)
-        model_RF = load_model_RF(pkl=False)
-        model_GBM = load_model_GB(pkl=False)
+        model_Lrn = load_model("linear")
+        model_Poly = load_model("poly")
+        model_RF = load_model("rf").best_estimator_
+        model_GB = load_model("gb").best_estimator_
+
 
         # --------------------------------------------------------------------------#
 
@@ -135,7 +148,7 @@ def main():
         Age = st.number_input("Age", min_value=18, max_value=70)
         Height = st.slider("Height(cm)", 140, 200)
         Weight = st.slider("Weight(kg)", 50, 140)
-        NumberOfMajorSurgeries = st.number_input("Number Of Major Surgeries", min_value=0, max_value=10)
+        NumberOfMajorSurgeries = st.slider("Number Of Major Surgeries", min_value=0, max_value=5)
         AnyChronicDiseases = st.checkbox('Any Chronic Diseases')
         HistoryOfCancerInFamily = st.checkbox('History Of Cancer In Family')
         AnyTransplants = st.checkbox('Any Transplants')
@@ -154,28 +167,41 @@ def main():
         HistoryOfCancerInFamily = 1 if HistoryOfCancerInFamily else 0
         BMI = Weight / ((Height / 100) ** 2)
 
+        columns = ('Age', 'Diabetes', 'BloodPressureProblems',
+                   'AnyTransplants', 'AnyChronicDiseases',
+                   'KnownAllergies',
+                   'HistoryOfCancerInFamily',
+                   'NumberOfMajorSurgeries',
+                   'BMI')
+
+        values = (
+            Age,
+            Diabetes,
+            BloodPressureProblems,
+            AnyTransplants,
+            AnyChronicDiseases,
+            KnownAllergies,
+            HistoryOfCancerInFamily,
+            NumberOfMajorSurgeries,
+            BMI,
+        )
+
         # --------------------------------------------------------------------------#
         if st.button('Get Predict', ):
             # Make prediction
-            prediction_Lrn = predict(model_Lrn, [
-                [Age, NumberOfMajorSurgeries, AnyChronicDiseases, HistoryOfCancerInFamily, AnyTransplants, BMI,
-                 BloodPressureProblems, Diabetes, KnownAllergies]])
 
+            X = get_x(columns=columns, values=values)
+
+            prediction_Lrn = predict(model_Lrn,X)
             st.write(f"(Lrn)- Linear Regression model Your health insurance premium price is Rs. {prediction_Lrn[0]:.5f}")
 
-            # prediction_Poly = predict(model_Poly, [
-            #     [Age, NumberOfMajorSurgeries, AnyChronicDiseases, HistoryOfCancerInFamily, AnyTransplants, BMI,
-            #      BloodPressureProblems, Diabetes, KnownAllergies]])
-            # st.success(f"(Poly)- Polynomial model Your health insurance premium price is Rs. {prediction_Poly[0]:.5f}")
+            prediction_Poly = predict(model_Poly, X)
+            st.write(f"(Poly)- Polynomial model Your health insurance premium price is Rs. {(prediction_Poly[0]):.5f}")
 
-            prediction_RF = predict(model_RF, [
-                [Age, NumberOfMajorSurgeries, AnyChronicDiseases, HistoryOfCancerInFamily, AnyTransplants, BMI,
-                 BloodPressureProblems, Diabetes, KnownAllergies]])
+            prediction_RF = predict(model_RF, X)
             st.write(f"(RF)- Random Forest model Your health insurance premium price is Rs. {prediction_RF[0]:.5f}")
 
-            prediction_GB = predict(model_GBM, [
-                [Age, NumberOfMajorSurgeries, AnyChronicDiseases, HistoryOfCancerInFamily, AnyTransplants, BMI,
-                 BloodPressureProblems, Diabetes, KnownAllergies]])
+            prediction_GB = predict(model_GB,X)
             st.write(f"(GBM)- Gradient Boosting model Your health insurance premium price is Rs. {prediction_GB[0]:.5f}")
 
     elif selected == "PCA":
@@ -192,7 +218,7 @@ def main():
         X = data_final.drop(['PremiumPrice'],axis=1)
         y = data_final['PremiumPrice']
 
-        # create PCA
+        # create PCA for observe
         scaler = StandardScaler()
         xsc = scaler.fit_transform(X)
 
@@ -231,11 +257,94 @@ def main():
         ax2.set_xlabel('Number of components')
         ax2.set_ylabel('Cumulative explained variance')
         ax2.axhline(y=0.85, color='r', linestyle='-', label='85% Threshold')
-        ax2.text(0.5, 0.85, '80% Cut-off Threshold', color='red', fontsize=16)
+        ax2.text(0.5, 0.85, '85% Cut-off Threshold', color='red', fontsize=16)
         ax2.legend()
-
         plt.tight_layout()
         st.pyplot(fig)
+
+        # --------------------------------------------------------------------------#
+
+        # Load model
+        model_Lrn = load_model("linear")
+        model_Poly = load_model("poly")
+        model_RF = load_model("rf").best_estimator_
+        model_GB = load_model("gb").best_estimator_
+
+        # Get features
+        st.write(f"linear {model_Lrn.feature_names_in_}")
+        st.write(f"poly {model_Poly.feature_names_in_}")
+        st.write(f"random forest {model_RF.feature_names_in_}")
+        st.write(f"gradient boosting{model_GB.feature_names_in_}")
+
+        # --------------------------------------------------------------------------#
+
+        # Collect user inputs
+        Age = st.number_input("Age", min_value=18, max_value=70)
+        Height = st.slider("Height(cm)", 140, 200)
+        Weight = st.slider("Weight(kg)", 50, 140)
+        NumberOfMajorSurgeries = st.slider("Number Of Major Surgeries", min_value=0, max_value=5)
+        AnyChronicDiseases = st.checkbox('Any Chronic Diseases')
+        HistoryOfCancerInFamily = st.checkbox('History Of Cancer In Family')
+        AnyTransplants = st.checkbox('Any Transplants')
+        BloodPressureProblems = st.checkbox('Blood Pressure Problems')
+        Diabetes = st.checkbox('Diabetes')
+        KnownAllergies = st.checkbox('Known Allergies')
+
+        # --------------------------------------------------------------------------#
+
+        # Testing PCA
+        st.title("Testing PCA")
+
+
+        # Convert checkbox values to binary
+        Diabetes = 1 if Diabetes else 0
+        BloodPressureProblems = 1 if BloodPressureProblems else 0
+        AnyTransplants = 1 if AnyTransplants else 0
+        AnyChronicDiseases = 1 if AnyChronicDiseases else 0
+        KnownAllergies = 1 if KnownAllergies else 0
+        HistoryOfCancerInFamily = 1 if HistoryOfCancerInFamily else 0
+        BMI = Weight / ((Height / 100) ** 2)
+
+        dict_encode = {
+            'Age': Age,
+            'Diabetes': Diabetes,
+            'BloodPressureProblems': BloodPressureProblems,
+            'AnyTransplants': AnyTransplants,
+            'AnyChronicDiseases': AnyChronicDiseases,
+            'KnownAllergies': KnownAllergies,
+            'HistoryOfCancerInFamily': HistoryOfCancerInFamily,
+            'NumberOfMajorSurgeries': NumberOfMajorSurgeries,
+            'BMI': BMI,
+        }
+
+        feature_columns_Lrn = model_Lrn.feature_names_in_
+        feature_columns_Poly = model_Poly.feature_names_in_
+        feature_columns_RF = model_RF.feature_names_in_
+        feature_columns_GB = model_GB.feature_names_in_
+
+        X_lrn = get_x(lst_order=feature_columns_Lrn, dict_encode=dict_encode)
+        # X_Poly = get_x_poly(lst_order=feature_columns_Lrn, dict_encode=dict_encode)
+        X_RF = get_x(lst_order=feature_columns_RF, dict_encode=dict_encode)
+        X_GB = get_x(lst_order=feature_columns_GB, dict_encode=dict_encode)
+
+        st.write(f"X_lrn",X_lrn)
+        st.write(f"X_RF",X_RF)
+        st.write(f"X_GB",X_GB)
+
+        n_components = 7
+        pca = PCA(n_components=n_components)
+        st.write("xsc", xsc)
+        pca.fit(xsc)
+        st.write("total explained_variance_ratio_ with n_components is 7: ", sum(pca.explained_variance_ratio_))
+
+        X_lrn_PCA = pca.transform(X_lrn)
+        # X_Poly_PCA = pca.transform()
+        X_RF_PCA = pca.transform(X_RF)
+        X_GB_PCA = pca.transform(X_GB)
+
+        st.write("X_lrn_PCA", X_lrn_PCA)
+        st.write("X_RF_PCA", X_RF_PCA)
+        st.write("X_GB_PCA", X_GB_PCA)
 
 
 
@@ -271,6 +380,11 @@ def main():
         palette = ["#82CCDD", "#F4D08F"]
 
         # --------------------------------------------------------------------------#
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.lineplot(x=df.Age, y=df.PremiumPrice, ax=ax)
+        ax.set_title('Insurance Premium Price by Age')
+        st.pyplot(fig)
 
         # 1,Distribution of the Insurance Premium Price
         st.subheader('1,Distribution of the Insurance Premium Price')
