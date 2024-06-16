@@ -307,13 +307,25 @@ def main():
 
         st.subheader('PCA')
         loadings = pd.DataFrame(pca.components_.T, columns=[f'PC{i}' for i in range(1, len(data_final.columns))], index=data_final.columns[:-1])
-        st.write(loadings)
+
 
         # Visual heatmap of PCA
         st.subheader("PCA Loadings Heatmap")
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=(12, 8),)
         sns.heatmap(loadings, annot=True, cmap='coolwarm', ax=ax)
         st.pyplot(fig)
+
+        # Các thuộc tính quan trọng
+        st.subheader('Important Combination')
+        threshold = 0.3
+        # Find features with loadings above the threshold for each principal component
+        important_features = {}
+        for column in loadings.columns:
+            important_features[column] = loadings.index[loadings[column].abs() > threshold].tolist()
+
+        # Now 'important_features' dictionary contains the important features for each PC
+        for pc, features in important_features.items():
+            st.write(f"{pc}: {', '.join(features)}")
 
         # Visual Scree Plot and Cumulative Explained Variance
 
@@ -341,6 +353,7 @@ def main():
         ax2.legend()
         plt.tight_layout()
         st.pyplot(fig)
+
 
         # --------------------------------------------------------------------------#
 
